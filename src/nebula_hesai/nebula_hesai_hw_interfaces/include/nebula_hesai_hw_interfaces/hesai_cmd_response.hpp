@@ -447,9 +447,10 @@ private:
   Internal value;
 };
 
-/// @brief Inventory of the AT128P. Same as the AT128E2X one, but with a part number inserted after
-/// the serial number (216 bytes in total).
-struct HesaiInventory_AT128P : public HesaiInventoryBase
+/// @brief Inventory of the AT128P and FTX140. Same as the AT128E2X one, but with a part number
+/// inserted after the serial number (216 bytes in total). On the FTX140, some of the version
+/// strings are longer than their fields and are cut off.
+struct HesaiInventory_AT128P_FTX : public HesaiInventoryBase
 {
   struct Internal
   {
@@ -474,11 +475,11 @@ struct HesaiInventory_AT128P : public HesaiInventoryBase
     uint8_t reserved[9];
   };
 
-  /// The AT128P reports 0 as its product model, which would be mistaken for a Pandar40P. Report the
-  /// AT128 model number instead, so that the AT128P is handled like the AT128 (PTC only).
+  /// Both sensors report 0 as their product model, which would be mistaken for a Pandar40P. Report
+  /// the AT128 model number instead, so that they are handled like the AT128 (PTC only).
   static constexpr uint8_t g_model_number = 48;
 
-  explicit HesaiInventory_AT128P(Internal value) : value(value)
+  explicit HesaiInventory_AT128P_FTX(Internal value) : value(value)
   {
     std::copy_n(value.sn, sizeof(base.sn), base.sn);
     std::copy_n(
@@ -772,6 +773,29 @@ protected:
   explicit HesaiLidarStatus_AT128_QT128(Internal value) : value(value) {}
 
   [[nodiscard]] virtual std::array<std::string, 9> get_temperature_names() const = 0;
+
+private:
+  Internal value;
+};
+
+/// @brief Lidar status of the FTX140. It has the AT128 layout (58 bytes), but the temperature
+/// fields are not filled, so they are not reported.
+struct HesaiLidarStatusFTX : public HesaiLidarStatusBase
+{
+  using Internal = HesaiLidarStatus_AT128_QT128::Internal;
+
+  explicit HesaiLidarStatusFTX(Internal value) : value(value) {}
+
+  [[nodiscard]] ordered_json sensor_specifics_to_json() const override
+  {
+    ordered_json j;
+    j["startup_times"] = value.startup_times.value();
+    j["total_operation_time"] = std::to_string(value.total_operation_time.value()) + " min";
+    j["ptp_status"] = get_str_ptp_clock_status(value.ptp_status);
+    return j;
+  }
+
+  [[nodiscard]] const HesaiLidarStatusBase::Internal & get() const override { return value; }
 
 private:
   Internal value;

@@ -346,7 +346,7 @@ TEST_F(TestHesaiHwInterface, TestAT128PCommands)
 
   auto inventory = hw_interface_->get_inventory();
   ASSERT_NE(inventory, nullptr);
-  EXPECT_EQ(inventory->model_number(), nebula::HesaiInventory_AT128P::g_model_number);
+  EXPECT_EQ(inventory->model_number(), nebula::HesaiInventory_AT128P_FTX::g_model_number);
   EXPECT_NE(hw_interface_->get_config(), nullptr);
   EXPECT_NE(hw_interface_->get_lidar_status(), nullptr);
 
@@ -355,13 +355,44 @@ TEST_F(TestHesaiHwInterface, TestAT128PCommands)
   EXPECT_NO_THROW(hw_interface_->get_lidar_monitor());
 }
 
+TEST_F(TestHesaiHwInterface, TestFTX140Commands)
+{
+  auto config = std::make_shared<nebula::drivers::HesaiSensorConfiguration>();
+  config->sensor_model = nebula::drivers::SensorModel::HESAI_FTX140;
+  config->sensor_ip = "127.0.0.1";
+  config->host_ip = "127.0.0.1";
+  config->data_port = 2368;
+  config->udp_socket_receive_buffer_size_bytes = 1024 * 1024;
+
+  hw_interface_->set_sensor_configuration(config);
+  hw_interface_->set_target_model(config->sensor_model);
+  EXPECT_EQ(hw_interface_->initialize_tcp_socket(), nebula::Status::OK);
+
+  // Sensor setup is skipped, lidar range is not supported
+  EXPECT_EQ(hw_interface_->check_and_set_config(), nebula::HesaiStatus::OK);
+  EXPECT_EQ(hw_interface_->set_lidar_range(40, 320), nebula::Status::SENSOR_CONFIG_ERROR);
+  EXPECT_THROW(hw_interface_->get_lidar_range(), std::runtime_error);
+
+  auto inventory = hw_interface_->get_inventory();
+  ASSERT_NE(inventory, nullptr);
+  EXPECT_EQ(inventory->model_number(), nebula::HesaiInventory_AT128P_FTX::g_model_number);
+  EXPECT_NE(hw_interface_->get_config(), nullptr);
+
+  // The FTX140 does not fill in the temperature fields of its status
+  auto status = hw_interface_->get_lidar_status();
+  ASSERT_NE(status, nullptr);
+  auto status_json = status->to_json();
+  EXPECT_FALSE(status_json.contains("temperature"));
+  EXPECT_TRUE(status_json.contains("ptp_status"));
+}
+
 TEST(TestHesaiInventoryAT128P, ParsesPartNumberLayout)
 {
-  using nebula::HesaiInventory_AT128P;
+  using nebula::HesaiInventory_AT128P_FTX;
   // Size of the AT128P inventory response
-  static_assert(sizeof(HesaiInventory_AT128P::Internal) == 216);
+  static_assert(sizeof(HesaiInventory_AT128P_FTX::Internal) == 216);
 
-  HesaiInventory_AT128P::Internal raw{};
+  HesaiInventory_AT128P_FTX::Internal raw{};
   const std::string sn = "AT128PTESTSN0001";
   const std::string pn = "AT128P-TEST-PN";
   const std::string date = "2000-01-01";
@@ -373,8 +404,8 @@ TEST(TestHesaiInventoryAT128P, ParsesPartNumberLayout)
   raw.product_model = 0;  // the AT128P reports 0 here
   raw.num_of_lines = 128;
 
-  HesaiInventory_AT128P inventory(raw);
-  EXPECT_EQ(inventory.model_number(), HesaiInventory_AT128P::g_model_number);
+  HesaiInventory_AT128P_FTX inventory(raw);
+  EXPECT_EQ(inventory.model_number(), HesaiInventory_AT128P_FTX::g_model_number);
 
   auto json = inventory.to_json();
   EXPECT_EQ(json["sn"], sn);
